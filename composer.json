@@ -1,0 +1,17 @@
+{
+    "name": "catch-of-the-day/amazon-sqs-bundle",
+    "license": "proprietary",
+    "type": "project",
+    "description": "Amazon SQS syncing bundle",
+    "autoload": {
+        "psr-4": {
+            "Cotd\\AmazonSqsBundle\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=5.5.9",
+        "symfony/symfony": "^3.2.0",
+        "psr/log": "^1.0",
+        "aws/aws-sdk-php": "^3"
+    }
+}

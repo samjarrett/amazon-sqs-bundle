@@ -1,0 +1,20 @@
+parameters:
+    cotd_amazon_sqs.queue_manager.class: Cotd\AmazonSqsBundle\QueueManager
+    cotd_amazon_sqs.task_runner_registry.class: Cotd\AmazonSqsBundle\TaskRunnerRegistry
+
+services:
+    cotd_amazon_sqs.task_runner_registry_prototype:
+        class: "%cotd_amazon_sqs.task_runner_registry.class%"
+        abstract: true
+
+    cotd_amazon_sqs.queue_manager_prototype:
+        class: "%cotd_amazon_sqs.queue_manager.class%"
+        abstract: true
+        arguments:
+            - ~
+            - ~
+            - ~
+            - ~
+            - ~
+        calls:
+            - [ "setLogger", [ "@logger" ] ]
