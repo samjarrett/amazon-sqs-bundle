@@ -1,7 +1,7 @@
 {
     "name": "catch-of-the-day/amazon-sqs-bundle",
     "license": "proprietary",
-    "type": "project",
+    "type": "library",
     "description": "Amazon SQS syncing bundle",
     "autoload": {
         "psr-4": {
