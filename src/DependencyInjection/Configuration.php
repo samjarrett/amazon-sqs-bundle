@@ -36,9 +36,9 @@ class Configuration implements ConfigurationInterface
                                         return is_array($v) && !array_key_exists('mode', $v) && !empty($v);
                                     })
                                     ->then(function ($v) {
-                                        if (array_key_exists('profile', $v)) {
+                                        if (array_key_exists('profile', $v) && !empty($v['profile'])) {
                                             $v['mode'] = 'profile';
-                                        } elseif (array_key_exists('access_key_id', $v) && array_key_exists('secret_key', $v)) {
+                                        } elseif (array_key_exists('access_key_id', $v) && !empty($v['access_key_id']) && array_key_exists('secret_key', $v) && !empty($v['secret_key'])) {
                                             $v['mode'] = 'key';
                                         }
 
@@ -47,9 +47,9 @@ class Configuration implements ConfigurationInterface
                                 ->end()
                                 ->children()
                                     ->scalarNode('mode')->defaultValue('null')->cannotBeEmpty()->end()
-                                    ->scalarNode('profile')->cannotBeEmpty()->end()
-                                    ->scalarNode('access_key_id')->cannotBeEmpty()->end()
-                                    ->scalarNode('secret_key')->cannotBeEmpty()->end()
+                                    ->scalarNode('profile')->defaultNull()->end()
+                                    ->scalarNode('access_key_id')->defaultNull()->end()
+                                    ->scalarNode('secret_key')->defaultNull()->end()
                                 ->end()
                             ->end()
                         ->end()
