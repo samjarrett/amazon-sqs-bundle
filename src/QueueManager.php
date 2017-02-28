@@ -24,6 +24,7 @@ class QueueManager
 
     const DEFAULT_WAIT_TIME = 20;
     const DEFAULT_WORKER_TIME = 300;
+    const DEFAULT_JOB_COUNT = 1;
 
     const PRIOR_RECEIVE_ATTEMPT_WARNING = 3;
 
@@ -180,10 +181,14 @@ class QueueManager
 
     /**
      * @param int $waitTime
+     * @param int $workerTime
+     * @param int $count
+     * @return int
      */
-    public function getTask($waitTime = self::DEFAULT_WAIT_TIME, $workerTime = self::DEFAULT_WORKER_TIME)
+    public function getTask($waitTime = self::DEFAULT_WAIT_TIME, $workerTime = self::DEFAULT_WORKER_TIME, $count = self::DEFAULT_JOB_COUNT)
     {
-        $this->logger->debug('Fetching tasks from queue {queueUrl} (timeout: {waitTime})', [
+        $this->logger->debug('Fetching {count} tasks from queue {queueUrl} (timeout: {waitTime})', [
+            'count' => $count,
             'queueUrl' => $this->queueUrl,
             'waitTime' => $waitTime,
         ]);
@@ -195,6 +200,7 @@ class QueueManager
             'QueueUrl' => $this->queueUrl,
             'WaitTimeSeconds' => $waitTime,
             'VisibilityTimeout' => $workerTime,
+            'MaxNumberOfMessages' => $count,
         ]);
 
         $messages = $result->hasKey('Messages') ? $result->get('Messages') : [];

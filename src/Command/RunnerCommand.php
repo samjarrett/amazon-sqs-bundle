@@ -23,6 +23,7 @@ class RunnerCommand extends ContainerAwareCommand
             ->addOption('wait-time', null, InputOption::VALUE_REQUIRED, 'The amount of time to wait for a job before exiting', QueueManager::DEFAULT_WAIT_TIME)
             ->addOption('worker-time', null, InputOption::VALUE_REQUIRED, 'The allowed time for a worker to complete a single job before AWS releases it back to the queue', QueueManager::DEFAULT_WORKER_TIME)
             ->addOption('sleep-if-empty', null, InputOption::VALUE_REQUIRED, 'How long to wait (in seconds) if there are no jobs', 0)
+            ->addOption('jobs', null, InputOption::VALUE_REQUIRED, 'How many jobs to fetch', QueueManager::DEFAULT_JOB_COUNT)
         ;
     }
 
