@@ -124,57 +124,58 @@ class QueueManager
 
     public function batchEnqueueTasks(array $tasks, $alreadyEncoded = false)
     {
-        $entries = [];
-        foreach ($tasks as $task) {
-            if (!array_key_exists('task', $task) || !array_key_exists('arguments', $task)) {
-                throw new \InvalidArgumentException('Batched tasks are required to have a "task" and "arguments" key');
-            }
-
-            $body = $task['arguments'];
-            if (!$alreadyEncoded) {
-                $body = json_encode($body);
-            }
-
-            $bytes = mb_strlen($body, '8bit');
-            if ($bytes > self::MESSAGE_LENGTH_BYTES) {
-                throw new \OutOfBoundsException(sprintf('Encoded message was too long: %sKiB provided - %sKiB maximum', $bytes / 1000, self::MESSAGE_LENGTH_BYTES  / 1000));
-            }
-
-            $id = hash('sha256', $task['task'] . ';' . $body);
-            $deduplicationId = array_key_exists('deduplicationId', $task) ? $task['deduplicationId'] : $id;
-            $messageGroupId = array_key_exists('messageGroupId', $task) ? $task['messageGroupId'] : $id;
-            $delay = array_key_exists('delay', $task) ? $task['delay'] : 0;
-
-            $entries[] = [
-                'Id' => $id,
-                'MessageGroupId' => $messageGroupId,
-                'MessageDeduplicationId' => $deduplicationId,
-                'DelaySeconds' => $delay,
-                'MessageAttributes' => [
-                    'task' => [
-                        'DataType' => 'String',
-                        'StringValue' => $task['task'],
-                    ],
-                ],
-                'MessageBody' => $body,
-            ];
-        }
-
-        $result = $this->getSqsClient()->sendMessageBatch([
-            'Entries' => $entries,
-            'QueueUrl' => $this->queueUrl,
-        ]);
-
         $ids = [];
-        if ($result->hasKey('Successful')) {
-            $ids = array_map(function ($data) {
-                return $data['MessageId'];
-            }, $result->get('Successful'));
+
+        foreach (array_chunk($tasks, 10) as $chunk) {
+            $entries = [];
+            foreach ($chunk as $task) {
+                if (!array_key_exists('task', $task) || !array_key_exists('arguments', $task)) {
+                    throw new \InvalidArgumentException('Batched tasks are required to have a "task" and "arguments" key');
+                }
+
+                $body = $task['arguments'];
+                if (!$alreadyEncoded) {
+                    $body = json_encode($body);
+                }
+
+                $bytes = mb_strlen($body, '8bit');
+                if ($bytes > self::MESSAGE_LENGTH_BYTES) {
+                    throw new \OutOfBoundsException(sprintf('Encoded message was too long: %sKiB provided - %sKiB maximum', $bytes / 1000, self::MESSAGE_LENGTH_BYTES / 1000));
+                }
+
+                $id = hash('sha256', $task['task'] . ';' . $body);
+                $deduplicationId = array_key_exists('deduplicationId', $task) ? $task['deduplicationId'] : $id;
+                $messageGroupId = array_key_exists('messageGroupId', $task) ? $task['messageGroupId'] : $id;
+                $delay = array_key_exists('delay', $task) ? $task['delay'] : 0;
+
+                $entries[] = [
+                    'Id' => $id,
+                    'MessageGroupId' => $messageGroupId,
+                    'MessageDeduplicationId' => $deduplicationId,
+                    'DelaySeconds' => $delay,
+                    'MessageAttributes' => [
+                        'task' => [
+                            'DataType' => 'String',
+                            'StringValue' => $task['task'],
+                        ],
+                    ],
+                    'MessageBody' => $body,
+                ];
+            }
+
+            $result = $this->getSqsClient()->sendMessageBatch([
+                'Entries' => $entries,
+                'QueueUrl' => $this->queueUrl,
+            ]);
+
+            if ($result->hasKey('Successful')) {
+                $ids = array_merge($ids, array_column($result->get('Successful'), 'MessageId'));
+            }
         }
 
         return [
-            'successful' => $result->hasKey('Successful') ? count($result->get('Successful')) : 0,
-            'failed' => $result->hasKey('Failed') ? count($result->get('Failed')) : 0,
+            'successful' => count($ids),
+            'failed' => count($tasks) - count($ids),
             'ids' => $ids,
         ];
     }
