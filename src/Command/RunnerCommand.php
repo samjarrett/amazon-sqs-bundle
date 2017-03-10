@@ -36,7 +36,7 @@ class RunnerCommand extends ContainerAwareCommand
         $queue = $this->getContainer()->get('cotd_amazon_sqs.queue_manager.' . $input->getArgument('queue'));
 
         try {
-            $processed = $queue->getTask($input->getOption('wait-time'), $input->getOption('worker-time'));
+            $processed = $queue->getTask($input->getOption('wait-time'), $input->getOption('worker-time'), $input->getOption('jobs'));
 
             $this->waitBeforeExiting($input, $processed);
         } catch (\Exception $e) {
