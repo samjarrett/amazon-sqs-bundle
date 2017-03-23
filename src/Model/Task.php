@@ -40,7 +40,7 @@ class Task
      */
     private $completed = false;
 
-    public function __construct($id, $receiptHandle, array $data, $rawData, array $attributes, array $messageAttributes)
+    public function __construct($id, $receiptHandle, $data, $rawData, array $attributes, array $messageAttributes)
     {
         $this->id = $id;
         $this->receiptHandle = $receiptHandle;
@@ -77,7 +77,7 @@ class Task
     /**
      * @return string
      */
-    public function getRawData(): string
+    public function getRawData()
     {
         return $this->rawData;
     }
