@@ -18,9 +18,10 @@ class QueueManager
     const CREDENTIALS_MODE_NULL = 'null';
 
     /**
-     * 256 KiB - SQS' max message size
+     * 200 KiB - SQS' max message size (256KiB) less some buffer for encoding
      */
-    const MESSAGE_LENGTH_BYTES = 256000;
+    const MESSAGE_LENGTH_BYTES = 200000;
+    const MESSAGE_LENGTH_ENTRIES = 10;
 
     const DEFAULT_WAIT_TIME = 20;
     const DEFAULT_WORKER_TIME = 300;
@@ -125,44 +126,55 @@ class QueueManager
     public function batchEnqueueTasks(array $tasks, $alreadyEncoded = false)
     {
         $ids = [];
+        $entries = [];
+        $totalBytes = 0;
 
-        foreach (array_chunk($tasks, 10) as $chunk) {
-            $entries = [];
-            foreach ($chunk as $task) {
-                if (!array_key_exists('task', $task) || !array_key_exists('arguments', $task)) {
-                    throw new \InvalidArgumentException('Batched tasks are required to have a "task" and "arguments" key');
-                }
-
-                $body = $task['arguments'];
-                if (!$alreadyEncoded) {
-                    $body = json_encode($body);
-                }
-
-                $bytes = mb_strlen($body, '8bit');
-                if ($bytes > self::MESSAGE_LENGTH_BYTES) {
-                    throw new \OutOfBoundsException(sprintf('Encoded message was too long: %sKiB provided - %sKiB maximum', $bytes / 1000, self::MESSAGE_LENGTH_BYTES / 1000));
-                }
-
-                $id = hash('sha256', $task['task'] . ';' . $body);
-                $deduplicationId = array_key_exists('deduplicationId', $task) ? $task['deduplicationId'] : $id;
-                $messageGroupId = array_key_exists('messageGroupId', $task) ? $task['messageGroupId'] : $id;
-                $delay = array_key_exists('delay', $task) ? $task['delay'] : 0;
-
-                $entries[] = [
-                    'Id' => $id,
-                    'MessageGroupId' => $messageGroupId,
-                    'MessageDeduplicationId' => $deduplicationId,
-                    'DelaySeconds' => $delay,
-                    'MessageAttributes' => [
-                        'task' => [
-                            'DataType' => 'String',
-                            'StringValue' => $task['task'],
-                        ],
-                    ],
-                    'MessageBody' => $body,
-                ];
+        foreach ($tasks as $task) {
+            $body = $task['arguments'];
+            if (!$alreadyEncoded) {
+                $body = json_encode($body);
             }
 
+            $id = hash('sha256', $task['task'] . ';' . $body);
+            $deduplicationId = array_key_exists('deduplicationId', $task) ? $task['deduplicationId'] : $id;
+            $messageGroupId = array_key_exists('messageGroupId', $task) ? $task['messageGroupId'] : $id;
+            $delay = array_key_exists('delay', $task) ? $task['delay'] : 0;
+
+            $entry = [
+                'Id' => $id,
+                'MessageGroupId' => $messageGroupId,
+                'MessageDeduplicationId' => $deduplicationId,
+                'DelaySeconds' => $delay,
+                'MessageAttributes' => [
+                    'task' => [
+                        'DataType' => 'String',
+                        'StringValue' => $task['task'],
+                    ],
+                ],
+                'MessageBody' => $body,
+            ];
+
+            $bytes = mb_strlen(json_encode($entry), '8bit');
+
+            if ($totalBytes + $bytes > self::MESSAGE_LENGTH_BYTES || count($entries) == self::MESSAGE_LENGTH_ENTRIES) {
+                $result = $this->getSqsClient()->sendMessageBatch([
+                    'Entries' => $entries,
+                    'QueueUrl' => $this->queueUrl,
+                ]);
+
+                if ($result->hasKey('Successful')) {
+                    $ids = array_merge($ids, array_column($result->get('Successful'), 'MessageId'));
+                }
+
+                $entries = [];
+                $totalBytes = 0;
+            }
+
+            $entries[] = $entry;
+            $totalBytes += $bytes;
+        }
+
+        if (count($entries) > 0) {
             $result = $this->getSqsClient()->sendMessageBatch([
                 'Entries' => $entries,
                 'QueueUrl' => $this->queueUrl,
