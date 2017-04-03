@@ -157,9 +157,12 @@ class QueueManager
             $bytes = mb_strlen(json_encode($entry), '8bit');
 
             if ($totalBytes + $bytes > self::MESSAGE_LENGTH_BYTES || count($entries) == self::MESSAGE_LENGTH_ENTRIES) {
-                $result = $this->getSqsClient()->sendMessageBatch([
-                    'Entries' => $entries,
-                    'QueueUrl' => $this->queueUrl,
+                $result = $this->sendMessageBatch($entries, [
+                    'stackBytes' => $totalBytes,
+                    'currentBytes' => $bytes,
+                    'totalBytes' => $totalBytes + $bytes,
+                    'byteLimit' => self::MESSAGE_LENGTH_BYTES,
+                    'count' => count($entries),
                 ]);
 
                 if ($result->hasKey('Successful')) {
@@ -175,9 +178,12 @@ class QueueManager
         }
 
         if (count($entries) > 0) {
-            $result = $this->getSqsClient()->sendMessageBatch([
-                'Entries' => $entries,
-                'QueueUrl' => $this->queueUrl,
+            $result = $this->sendMessageBatch($entries, [
+                'stackBytes' => $totalBytes,
+                'currentBytes' => $bytes ?: 0,
+                'totalBytes' => $totalBytes + $bytes,
+                'byteLimit' => self::MESSAGE_LENGTH_BYTES,
+                'count' => count($entries),
             ]);
 
             if ($result->hasKey('Successful')) {
@@ -190,6 +196,42 @@ class QueueManager
             'failed' => count($tasks) - count($ids),
             'ids' => $ids,
         ];
+    }
+
+    private function sendMessageBatch($entries, $debugData = [], $isRetry = false)
+    {
+        if (count($entries) == 0) {
+            $this->logger->critical('Attempted to call SQS SendMessageBatch with no messages (suggests a single message was greater than the maximum size)', $debugData);
+
+            throw new \DomainException('Attempted to call SQS SendMessageBatch with no messages (suggests a single message was greater than the maximum size)');
+        }
+
+        try {
+            $result = $this->getSqsClient()->sendMessageBatch([
+                'Entries' => $entries,
+                'QueueUrl' => $this->queueUrl,
+            ]);
+        } catch (\Exception $e) {
+            $logDebugData = [];
+            $retryMessage = ' This will be reattempted.';
+
+            if ($isRetry) {
+                $logDebugData = $debugData;
+                $retryMessage = ''; // second failed attempt is not retried
+                $logDebugData['entries'] = json_encode($entries);
+            }
+
+            $logDebugData['exceptionMessage'] = $e->getMessage();
+            $this->logger->error(sprintf('SQS SendMessageBatch call failure: {exceptionMessage}.%s', $retryMessage), $logDebugData);
+
+            if (!$isRetry) {
+                return $this->sendMessageBatch($entries, $debugData, true);
+            }
+
+            throw $e;
+        }
+
+        return $result;
     }
 
     /**
