@@ -22,6 +22,8 @@ class CotdAmazonSqsExtension extends Extension
     const QUEUE_MANAGER_PROTOTYPE_SERVICE_NAME = 'cotd_amazon_sqs.queue_manager_prototype';
     const QUEUE_MANAGER_SERVICE_PREFIX = 'cotd_amazon_sqs.queue_manager.%s';
 
+    const REGISTRY_SERVICE = 'cotd_amazon_sqs.registry';
+
     /**
      * {@inheritdoc}
      */
@@ -33,6 +35,8 @@ class CotdAmazonSqsExtension extends Extension
         $loader = new Loader\YamlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
         $loader->load('services.yml');
 
+        $queues = [];
+
         foreach ($config['queues'] as $name => $configuration) {
             $registryDefinition = new DefinitionDecorator(self::TASK_RUNNER_REGISTRY_PROTOTYPE_SERVICE_NAME);
             $container->setDefinition(sprintf(self::TASK_RUNNER_REGISTRY_SERVICE_PREFIX, $name), $registryDefinition);
@@ -43,6 +47,11 @@ class CotdAmazonSqsExtension extends Extension
             $managerDefinition->replaceArgument(2, new Reference(sprintf(self::TASK_RUNNER_REGISTRY_SERVICE_PREFIX, $name)));
             $managerDefinition->replaceArgument(3, $configuration['credentials']);
             $container->setDefinition(sprintf(self::QUEUE_MANAGER_SERVICE_PREFIX, $name), $managerDefinition);
+
+            $queues[$name] = new Reference(sprintf(self::QUEUE_MANAGER_SERVICE_PREFIX, $name));
         }
+
+        $credentialFactory = $container->getDefinition(self::REGISTRY_SERVICE);
+        $credentialFactory->replaceArgument(0, $queues);
     }
 }

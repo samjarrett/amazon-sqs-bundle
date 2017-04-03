@@ -6,6 +6,7 @@ namespace Cotd\AmazonSqsBundle;
 use Aws\Credentials\Credentials;
 use Aws\Sqs\SqsClient;
 use Cotd\AmazonSqsBundle\Exception\TaskRunnerNotFoundException;
+use Cotd\AmazonSqsBundle\Model\QueueAttributes;
 use Cotd\AmazonSqsBundle\Model\Task;
 use Psr\Log\LoggerAwareTrait;
 
@@ -68,9 +69,10 @@ class QueueManager
 
                 case self::CREDENTIALS_MODE_KEY:
                     $configuration['credentials'] = new Credentials($credentials['access_key_id'], $credentials['secret_key']);
-                break;
+                    break;
             }
         }
+
         $this->sqsClient = new SqsClient($configuration);
     }
 
@@ -357,5 +359,20 @@ class QueueManager
         ]);
 
         return true;
+    }
+
+    /**
+     * Retrieve attributes of the queue
+     *
+     * @return QueueAttributes
+     */
+    public function getAttributes()
+    {
+        $result = $this->getSqsClient()->getQueueAttributes([
+            'QueueUrl' => $this->queueUrl,
+            'AttributeNames' => [ 'All' ],
+        ]);
+
+        return new QueueAttributes($result->get('Attributes'));
     }
 }

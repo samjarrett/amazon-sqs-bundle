@@ -1,6 +1,7 @@
 parameters:
     cotd_amazon_sqs.queue_manager.class: Cotd\AmazonSqsBundle\QueueManager
     cotd_amazon_sqs.task_runner_registry.class: Cotd\AmazonSqsBundle\TaskRunnerRegistry
+    cotd_amazon_sqs.registry.class: Cotd\AmazonSqsBundle\Model\Registry
 
 services:
     cotd_amazon_sqs.task_runner_registry_prototype:
@@ -18,3 +19,9 @@ services:
             - ~
         calls:
             - [ "setLogger", [ "@logger" ] ]
+
+
+    cotd_amazon_sqs.registry:
+        class: "%cotd_amazon_sqs.registry.class%"
+        arguments:
+            - []
