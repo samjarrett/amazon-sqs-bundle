@@ -329,6 +329,13 @@ class QueueManager
             $this->logger->critical('Unable to process task with type={type}: No associated runner is registered', [
                 'type' => $type,
             ]);
+        } catch (\Exception $e) {
+            $this->logger->critical('Caught exception when running task with type={type} and id={id}: {message} (This is retry {retry} of 5)', [
+                'type' => $type,
+                'id' => $id,
+                'message' => $e->getMessage(),
+                'retry' => $priorReceiveAttempts,
+            ]);
         }
     }
 
