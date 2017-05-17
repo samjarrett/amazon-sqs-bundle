@@ -158,17 +158,18 @@ class QueueManager
 
             $bytes = mb_strlen(json_encode($entry), '8bit');
 
-            if ($totalBytes + $bytes > self::MESSAGE_LENGTH_BYTES || count($entries) == self::MESSAGE_LENGTH_ENTRIES) {
-                $result = $this->sendMessageBatch($entries, [
-                    'stackBytes' => $totalBytes,
-                    'currentBytes' => $bytes,
-                    'totalBytes' => $totalBytes + $bytes,
-                    'byteLimit' => self::MESSAGE_LENGTH_BYTES,
-                    'count' => count($entries),
-                ]);
+            if ($bytes > self::MESSAGE_LENGTH_BYTES) {
+                $this->logger->error('Message: ' . json_encode($entry));
 
-                if ($result->hasKey('Successful')) {
-                    $ids = array_merge($ids, array_column($result->get('Successful'), 'MessageId'));
+                throw new \DomainException('A single message exceeded the maximum SQS request size');
+            } elseif ($totalBytes + $bytes > self::MESSAGE_LENGTH_BYTES || count($entries) == self::MESSAGE_LENGTH_ENTRIES) {
+                if (count($entries) > 0) {
+                    $result = $this->sendMessageBatch($entries);
+                    if ($result !== false) {
+                        $ids = array_merge($ids, $result);
+                    }
+                } elseif ($bytes) {
+                    $this->logger->critical('A single message was over the maximum SQS request size');
                 }
 
                 $entries = [];
@@ -180,16 +181,9 @@ class QueueManager
         }
 
         if (count($entries) > 0) {
-            $result = $this->sendMessageBatch($entries, [
-                'stackBytes' => $totalBytes,
-                'currentBytes' => $bytes ?: 0,
-                'totalBytes' => $totalBytes + $bytes,
-                'byteLimit' => self::MESSAGE_LENGTH_BYTES,
-                'count' => count($entries),
-            ]);
-
-            if ($result->hasKey('Successful')) {
-                $ids = array_merge($ids, array_column($result->get('Successful'), 'MessageId'));
+            $result = $this->sendMessageBatch($entries);
+            if ($result !== false) {
+                $ids = array_merge($ids, $result);
             }
         }
 
@@ -200,40 +194,34 @@ class QueueManager
         ];
     }
 
-    private function sendMessageBatch($entries, $debugData = [], $isRetry = false)
+    private function sendMessageBatch(array $entries, $isRetry = false)
     {
-        if (count($entries) == 0) {
-            $this->logger->critical('Attempted to call SQS SendMessageBatch with no messages (suggests a single message was greater than the maximum size)', $debugData);
-
-            throw new \DomainException('Attempted to call SQS SendMessageBatch with no messages (suggests a single message was greater than the maximum size)');
-        }
-
         try {
             $result = $this->getSqsClient()->sendMessageBatch([
                 'Entries' => $entries,
                 'QueueUrl' => $this->queueUrl,
             ]);
         } catch (\Exception $e) {
-            $logDebugData = [];
             $retryMessage = ' This will be reattempted.';
 
             if ($isRetry) {
-                $logDebugData = $debugData;
                 $retryMessage = ''; // second failed attempt is not retried
-                $logDebugData['entries'] = json_encode($entries);
             }
 
-            $logDebugData['exceptionMessage'] = $e->getMessage();
-            $this->logger->error(sprintf('SQS SendMessageBatch call failure: {exceptionMessage}.%s', $retryMessage), $logDebugData);
+            $this->logger->error(sprintf('SQS SendMessageBatch call failure: {exceptionMessage}.%s', $retryMessage));
 
             if (!$isRetry) {
-                return $this->sendMessageBatch($entries, $debugData, true);
+                return $this->sendMessageBatch($entries, true);
             }
 
             throw $e;
         }
 
-        return $result;
+        if ($result->hasKey('Successful')) {
+            return array_column($result->get('Successful'), 'MessageId');
+        }
+
+        return false;
     }
 
     /**
