@@ -318,12 +318,18 @@ class QueueManager
                 'type' => $type,
             ]);
         } catch (\Exception $e) {
-            $this->logger->critical('Caught exception when running task with type={type} and id={id}: {message} (This is retry {retry} of 5)', [
-                'type' => $type,
-                'id' => $id,
-                'message' => $e->getMessage(),
-                'retry' => $priorReceiveAttempts,
-            ]);
+            $this->logger->critical(
+                'Caught {class} exception when running task with type={type} and id={id}: ({file} / {line}) {message} (This is retry {retry} of 5)', [
+                    'class' => get_class($e),
+                    'type' => $type,
+                    'id' => $id,
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'message' => $e->getMessage(),
+                    'retry' => $priorReceiveAttempts,
+                    'exception' => $e,
+                ]
+            );
         }
     }
 
